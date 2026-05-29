@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS Image Geotagger - Auto Responsive Size</title>
+    <title>GPS Image</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -135,7 +135,7 @@
     // গিটহাবের স্ট্যাটিক ম্যাপ ইমেজ অবজেক্ট তৈরি
     let staticMap = new Image();
     staticMap.crossOrigin = "anonymous"; 
-    staticMap.src = "https://raw.githubusercontent.com/shortsproeran-creator/mt/main/1780042897961_unnamed.png";
+    staticMap.src = "https://raw.githubusercontent.com/appcreator05/gps-image/refs/heads/main/unnamed.png";
 
     // অটোমেটিক তারিখ ও সময় জেনারেট করার লজিক
     function setAutomaticDateTime() {
@@ -303,6 +303,35 @@
         }
     });
 </script>
+<script>
+// 1. Right Click bondho
+document.addEventListener('contextmenu', event => event.preventDefault());
 
+// 2. Advanced Security & Alt-Menu Block
+function blockSecurity(e) {
+    // Alt key block (System Menu block korar chesta)
+    if (e.altKey || e.keyCode == 18) {
+        e.preventDefault();
+        return false;
+    }
+
+    // F12, Ctrl+U, Ctrl+Shift+I, Ctrl+S, Ctrl+C block
+    if (e.keyCode == 123 || 
+        (e.ctrlKey && e.keyCode == 85) || 
+        (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74 || e.keyCode == 67)) || 
+        (e.ctrlKey && e.keyCode == 83) || 
+        (e.ctrlKey && e.keyCode == 67)) {
+        e.preventDefault();
+        return false;
+    }
+}
+
+// Keydown ebong Keyup — duto event-ei block kora hochhe jate menu na ashe
+document.addEventListener('keydown', blockSecurity);
+document.addEventListener('keyup', blockSecurity);
+
+// 3. Text Selection block
+document.onselectstart = function() { return false; };
+</script>
 </body>
 </html>
