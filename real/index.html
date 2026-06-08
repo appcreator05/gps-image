@@ -9,14 +9,18 @@
   h2 {color:#333; padding:15px; margin:0; text-align: center;}
   #container {max-width:520px; margin:auto; padding:10px; box-sizing: border-box;}
   video, canvas {max-width:100%; width:100%; border-radius:8px; background:#000;}
-  #controls {text-align:center; margin:15px 0;}
+  #controls {display: flex; gap: 10px; margin:15px 0;}
   #controls button {
-    width: 100%;
+    flex: 1;
     padding: 14px 20px; font-size: 16px; font-weight:bold;
-    border:none; border-radius:8px; color:#fff; cursor:pointer; background:#9c27b0;
+    border:none; border-radius:8px; color:#fff; cursor:pointer;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
   }
-  #controls button:hover { background:#8e24aa; }
+  .btn-capture { background:#9c27b0; }
+  .btn-capture:hover { background:#8e24aa; }
+  .btn-switch { background:#009688; }
+  .btn-switch:hover { background:#00897b; }
+  
   #details {background:#fff; padding:12px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); margin-top: 10px;}
   #details p {margin:6px 0; font-size:14px; color: #444; line-height: 1.4;}
   
@@ -52,7 +56,8 @@
   </div>
 
   <div id="controls">
-    <button onclick="captureAndDownload()">📸 Capture & Download</button>
+    <button class="btn-capture" onclick="captureAndDownload()">📸 Capture</button>
+    <button class="btn-switch" onclick="switchCamera()">🔄 Switch Camera</button>
   </div>
 </div>
 
@@ -62,6 +67,8 @@ let canvas = document.getElementById('canvas');
 let ctx = canvas.getContext('2d');
 let lat="", lon="", address="Fetching...", weather="--", formattedDateTime="";
 let loadingBar = document.getElementById('loadingBar');
+let currentStream = null;
+let currentFacingMode = "environment"; // default back camera
 
 // গিটহাবের স্ট্যাটিক ম্যাপ অবজেক্ট তৈরি
 let staticMap = new Image();
@@ -91,13 +98,27 @@ function getFormattedDateTime() {
     return `Date/Time: ${day}${suffix} ${monthName} ${year}, ${hours}:${minutes} ${ampm}`;
 }
 
-// Start camera immediately
-async function startCamera(){
+// Start camera functions
+async function startCamera(facingMode){
+  // চলমান কোনো স্ট্রিম থাকলে আগে তা বন্ধ করতে হবে
+  if (currentStream) {
+      currentStream.getTracks().forEach(track => track.stop());
+  }
+  
   try{
-    let stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
-    video.srcObject = stream;
-    getLocation();
-  }catch(e){alert("Camera blocked:"+e);}
+    let constraints = { video: { facingMode: facingMode } };
+    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = currentStream;
+    currentFacingMode = facingMode;
+  }catch(e){
+    alert("Camera blocked or not available: " + e);
+  }
+}
+
+// ক্যামেরা পরিবর্তন করার ফাংশন
+function switchCamera() {
+    let targetMode = (currentFacingMode === "environment") ? "user" : "environment";
+    startCamera(targetMode);
 }
 
 function getLocation(){
@@ -181,9 +202,17 @@ function captureAndDownload(){
   // ক্যামেরার অরিজিনাল ক্যাপচার সাইজ সেট করা
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
+  
+  // যদি ফ্রন্ট ক্যামেরা হয়, তবে ছবিটিকে মিরর (উল্টো) হওয়া থেকে সোজা করার জন্য এই লজিকটি কাজ করবে
+  ctx.save();
+  if (currentFacingMode === "user") {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+  }
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
 
-  // ডাইনামিক স্কেলিং ফ্যাক্টর (ক্যামেরা মেগাপিক্সেল অনুযায়ী সাইজ ঠিক রাখার জন্য)
+  // ডাইনামিক স্কেলিং ফ্যাক্টর
   const scaleFactor = Math.max(canvas.width / 480, 0.6);
 
   // 👉 Watermark (Top Right)
@@ -221,7 +250,7 @@ function captureAndDownload(){
   const fullAddress = "📍 Address: " + address;
   const latLonStr = `Lat: ${lat}  Lon: ${lon}`;
   const weatherStr = weather.startsWith("Weather:") ? weather : "Weather: " + weather;
-  const currentDateTimeStr = getFormattedDateTime(); // ক্যাপচারের নিখুঁত সময়
+  const currentDateTimeStr = getFormattedDateTime(); 
 
   const textPaddingLeft = mapX + mapSize + (15 * scaleFactor);
   const maxWidth = canvas.width - textPaddingLeft - (15 * scaleFactor);
@@ -237,7 +266,7 @@ function captureAndDownload(){
   ctx.fillText(weatherStr, textPaddingLeft, nextY + (lineSpacing * 2));
   ctx.fillText(currentDateTimeStr, textPaddingLeft, nextY + (lineSpacing * 3));
 
-  // অটো ব্লগ ডাউনলোড জেনারেটর (মোবাইল অ্যাপ ফ্রেন্ডলি)
+  // অটো ডাউনলোড জেনারেটর
   try {
       canvas.toBlob(function(blob) {
           if (!blob) return;
@@ -251,7 +280,6 @@ function captureAndDownload(){
           URL.revokeObjectURL(blobUrl);
       }, "image/jpeg", 0.95);
   } catch(e) {
-      // স্যান্ডবক্স ব্লক ব্যাকআপ
       let link = document.createElement('a');
       link.download = "gps_camera_capture.jpg";
       link.href = canvas.toDataURL("image/jpeg", 0.95);
@@ -259,22 +287,21 @@ function captureAndDownload(){
   }
 }
 
-// ক্যামেরা রান করা হলো
-startCamera();
+// শুরুতে ব্যাক ক্যামেরা এবং লোকেশন রান করা হলো
+startCamera("environment");
+getLocation();
 </script>
+
 <script>
-// 1. Right Click bondho
+// ১. Right Click বন্ধ
 document.addEventListener('contextmenu', event => event.preventDefault());
 
-// 2. Advanced Security & Alt-Menu Block
+// ২. Advanced Security & Alt-Menu Block
 function blockSecurity(e) {
-    // Alt key block (System Menu block korar chesta)
     if (e.altKey || e.keyCode == 18) {
         e.preventDefault();
         return false;
     }
-
-    // F12, Ctrl+U, Ctrl+Shift+I, Ctrl+S, Ctrl+C block
     if (e.keyCode == 123 || 
         (e.ctrlKey && e.keyCode == 85) || 
         (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74 || e.keyCode == 67)) || 
@@ -285,11 +312,10 @@ function blockSecurity(e) {
     }
 }
 
-// Keydown ebong Keyup — duto event-ei block kora hochhe jate menu na ashe
 document.addEventListener('keydown', blockSecurity);
 document.addEventListener('keyup', blockSecurity);
 
-// 3. Text Selection block
+// ৩. Text Selection block
 document.onselectstart = function() { return false; };
 </script>
 </body>
