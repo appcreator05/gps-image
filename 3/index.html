@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Map Camera</title>
+    <style>
+        body {font-family: Arial, sans-serif; background:#f5f5f5; margin:0; padding:0;}
+        h2 {color:#333; padding:15px; margin:0; text-align: center;}
+        #container { margin:auto; padding:10px; box-sizing: border-box; max-width: 600px;}
+        video, canvas {max-width:100%; width:100%; border-radius:8px; background:#000;}
+        #controls {display: flex; gap: 10px; margin:15px 0;}
+        #controls button {
+            flex: 1;
+            padding: 14px 20px; font-size: 16px; font-weight:bold;
+            border:none; border-radius:8px; color:#fff; cursor:pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .btn-capture { background:#9c27b0; }
+        .btn-capture:hover { background:#8e24aa; }
+        .btn-switch { background:#009688; }
+        .btn-switch:hover { background:#00897b; }
+        
+        #details {background:#fff; padding:12px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); margin-top: 10px;}
+        #details p {margin:6px 0; font-size:14px; color: #444; line-height: 1.4;}
+        
+        /* Loading bar */
+        #loadingBar {
+            width:100%; background:#ddd; border-radius:6px; overflow:hidden;
+            margin:10px 0; height:12px; display:none;
+        }
+        #loadingBar div {
+            width:0%; height:100%; background:#1976d2; animation: loadingAnim 2s infinite;
+        }
+        @keyframes loadingAnim {
+            0% {width:0%;}
+            50% {width:80%;}
+            100% {width:0%;}
+        }
+    </style>
+</head>
+<body>
+
+<h2>📷 GPS Map Camera</h2>
+<div id="container">
+    <video id="camera" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <div id="loadingBar"><div></div></div>
+
+    <div id="controls">
+        <button class="btn-capture" onclick="captureAndDownload()">📸 Capture</button>
+        <button class="btn-switch" onclick="switchCamera()">🔄 Switch Camera</button>
+    </div>
+    
+    <div id="details">
+        <p><b>📍 Address:</b> <span id="addressInfo">Fetching...</span></p>
+        <p><b>Lat/Lon:</b> <span id="coords">--</span></p>
+        <p><b>Weather:</b> <span id="weatherInfo">--</span></p>
+        <p><b>Date/Time:</b> <span id="timeInfo">--</span></p>
+    </div>
+</div>
+
+<script>
+    let video = document.getElementById('camera');
+    let canvas = document.getElementById('canvas');
+    let ctx = canvas.getContext('2d');
+    let lat="", lon="", address="Fetching...", weather="--", formattedDateTime="";
+    let loadingBar = document.getElementById('loadingBar');
+    let currentStream = null;
+    let currentFacingMode = "environment"; 
+
+    let staticMap = new Image();
+    staticMap.crossOrigin = "anonymous"; 
+    staticMap.src = "https://raw.githubusercontent.com/appcreator05/gps-image/refs/heads/main/logo.png";
+
+    function getFormattedDateTime() {
+        const now = new Date();
+        const day = now.getDate();
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const monthName = months[now.getMonth()];
+        const year = now.getFullYear();
+        let suffix = "th";
+        if (day === 1 || day === 21 || day === 31) suffix = "st";
+        else if (day === 2 || day === 22) suffix = "nd";
+        else if (day === 3 || day === 23) suffix = "rd";
+        let hours = now.getHours();
+        let minutes = now.getMinutes();
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12; 
+        minutes = minutes < 10 ? '0' + minutes : minutes; 
+        return `Date/Time: ${day}${suffix} ${monthName} ${year}, ${hours}:${minutes} ${ampm}`;
+    }
+
+    async function startCamera(facingMode){
+        if (currentStream) currentStream.getTracks().forEach(track => track.stop());
+        try{
+            let constraints = { video: { facingMode: { ideal: facingMode } } };
+            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = currentStream;
+            currentFacingMode = facingMode;
+        }catch(e){ alert("Camera blocked or not available: " + e); }
+    }
+
+    function switchCamera() {
+        let targetMode = (currentFacingMode === "environment") ? "user" : "environment";
+        startCamera(targetMode);
+    }
+
+    function getLocation(){
+        if(navigator.geolocation){
+            loadingBar.style.display="block"; 
+            navigator.geolocation.watchPosition(async pos=>{
+                lat = pos.coords.latitude.toFixed(5);
+                lon = pos.coords.longitude.toFixed(5);
+                document.getElementById('coords').innerText = `Lat: ${lat}  Lon: ${lon}`;
+                formattedDateTime = getFormattedDateTime();
+                document.getElementById('timeInfo').innerText = formattedDateTime.replace("Date/Time: ", "");
+                try{
+                    let r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+                    let d = await r.json(); 
+                    address = d.display_name || "Not Found";
+                }catch{address = "Not Found";}
+                document.getElementById('addressInfo').innerText = address;
+                try{
+                    let r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+                    let d = await r.json(); 
+                    weather = "Weather: " + d.current_weather.temperature+"°C, Wind "+d.current_weather.windspeed+"km/h";
+                }catch{weather = "N/A";}
+                document.getElementById('weatherInfo').innerText = weather.replace("Weather: ", "");
+                loadingBar.style.display="none";
+            }, err => { loadingBar.style.display="none"; console.error(err); }, {enableHighAccuracy: true});
+        }
+    }
+
+    function drawRoundedRect(context, x, y, width, height, radius) {
+        context.beginPath();
+        context.moveTo(x + radius, y);
+        context.lineTo(x + width - radius, y);
+        context.quadraticCurveTo(x + width, y, x + width, y + radius);
+        context.lineTo(x + width, y + height - radius);
+        context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        context.lineTo(x + radius, y + height);
+        context.quadraticCurveTo(x, y + height, x, y + height - radius);
+        context.lineTo(x, y + radius);
+        context.quadraticCurveTo(x, y, x + radius, y);
+        context.closePath();
+    }
+
+    function drawWrappedText(context, text, x, y, maxWidth, lineHeight) {
+        const words = text.split(' ');
+        let line = '';
+        let currentY = y;
+        for (let n = 0; n < words.length; n++) {
+            let testLine = line + words[n] + ' ';
+            let metrics = context.measureText(testLine);
+            if (metrics.width > maxWidth && n > 0) {
+                context.fillText(line, x, currentY);
+                line = words[n] + ' ';
+                currentY += lineHeight;
+            } else { line = testLine; }
+        }
+        context.fillText(line, x, currentY);
+        return currentY;
+    }
+
+    function captureAndDownload(){
+        let w = video.videoWidth || video.clientWidth || 640;
+        let h = video.videoHeight || video.clientHeight || 480;
+        canvas.width = w; canvas.height = h; 
+        ctx.save();
+        if (currentFacingMode === "user") { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+        const scaleFactor = Math.max(canvas.width / 480, 0.6);
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.font = `normal ${Math.round(18 * scaleFactor)}px Arial`;
+        ctx.textAlign = "right";
+        ctx.fillText("https://www.vdosky.in", canvas.width - (15 * scaleFactor), 30 * scaleFactor);
+        let overlayHeight = 110 * scaleFactor;
+        ctx.fillStyle = "rgba(0,0,0,0.65)";
+        ctx.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
+        const mapSize = 80 * scaleFactor;
+        const mapX = 15 * scaleFactor;
+        const mapY = canvas.height - overlayHeight + (overlayHeight - mapSize) / 2;
+        ctx.save();
+        drawRoundedRect(ctx, mapX, mapY, mapSize, mapSize, 15 * scaleFactor);
+        ctx.clip(); 
+        try { ctx.drawImage(staticMap, mapX, mapY, mapSize, mapSize); } catch (e) { console.error(e); }
+        ctx.restore();
+        ctx.font = `normal ${Math.round(14 * scaleFactor)}px Arial, sans-serif`;
+        ctx.fillStyle = "#fff"; ctx.textAlign = "left";
+        const textPaddingLeft = mapX + mapSize + (15 * scaleFactor);
+        const maxWidth = canvas.width - textPaddingLeft - (15 * scaleFactor);
+        const lineSpacing = 16 * scaleFactor;
+        let startY = canvas.height - overlayHeight + (30 * scaleFactor);
+        let nextY = drawWrappedText(ctx, "📍 Address: " + address, textPaddingLeft, startY, maxWidth, lineSpacing);
+        ctx.fillText(`Lat: ${lat}  Lon: ${lon}`, textPaddingLeft, nextY + lineSpacing);
+        ctx.fillText(weather, textPaddingLeft, nextY + (lineSpacing * 2));
+        ctx.fillText(getFormattedDateTime(), textPaddingLeft, nextY + (lineSpacing * 3));
+        try {
+            canvas.toBlob(function(blob) {
+                const link = document.createElement('a');
+                link.download = "gps_camera_" + Date.now() + ".jpg";
+                link.href = URL.createObjectURL(blob);
+                link.click();
+            }, "image/jpeg", 0.95);
+        } catch(e) { window.location.href = canvas.toDataURL("image/jpeg", 0.95); }
+    }
+
+    startCamera("environment");
+    getLocation();
+</script>
+</body>
+</html>
