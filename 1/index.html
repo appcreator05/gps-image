@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Image</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 0px;
+           
+        }
+        .container {
+            
+   
+           
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-top: 0;
+        }
+        .form-group {
+            margin-bottom: 12px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+            font-size: 14px;
+        }
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        #previewContainer {
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+        #outputImage {
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        }
+        .instruction {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>GPS Photo Creator (Original Size)</h2>
+    
+    <div class="form-group">
+        <label for="imageLoader">Chobi Upload Korun (Upload Image):</label>
+        <input type="file" id="imageLoader" accept="image/*">
+    </div>
+
+    <div class="form-group">
+        <label for="addressInput">Thikana (Address):</label>
+        <input type="text" id="addressInput" value="Howrah, Balitikuri Shekh Para, Howrah, West Bengal, 711113">
+    </div>
+
+    <div class="form-group">
+        <label for="latLonInput">Lat & Lon:</label>
+        <input type="text" id="latLonInput" value="Lat: 22.59746  Lon: 88.31042">
+    </div>
+
+    <div class="form-group">
+        <label for="weatherInput">Abahawa (Weather):</label>
+        <input type="text" id="weatherInput" value="Weather: 35.2°C, Wind 17.3km/h">
+    </div>
+
+    <div class="form-group">
+        <label for="dateTimeInput">Tarikh o Somoy (Date & Time):</label>
+        <input type="text" id="dateTimeInput" value="">
+    </div>
+
+    <button id="generateBtn">Chobi-te Details Juktukorun</button>
+    
+    <div id="previewContainer">
+        <h3>Preview:</h3>
+        <img id="outputImage" alt="GPS Tagged Output">
+        <canvas id="imageCanvas" style="display: none;"></canvas>
+        <button id="downloadBtn" style="background-color: #007bff; margin-top: 15px;">Download Image</button>
+        <span class="instruction">* Jodi download button kaj na kore, tobe uporer chobitir upor tepay (long-press) kore "Save Image" korun।</span>
+    </div>
+</div>
+
+<script>
+    const imageLoader = document.getElementById('imageLoader');
+    const canvas = document.getElementById('imageCanvas');
+    const ctx = canvas.getContext('2d');
+    const outputImage = document.getElementById('outputImage');
+    const generateBtn = document.getElementById('generateBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const previewContainer = document.getElementById('previewContainer');
+
+    let uploadedImage = new Image();
+
+    // গিটহাবের স্ট্যাটিক ম্যাপ ইমেজ অবজেক্ট তৈরি
+    let staticMap = new Image();
+    staticMap.crossOrigin = "anonymous"; 
+    staticMap.src = "https://raw.githubusercontent.com/appcreator05/gps-image/refs/heads/main/logo.png";
+
+    // অটোমেটিক তারিখ ও সময় জেনারেট করার লজিক
+    function setAutomaticDateTime() {
+        const now = new Date();
+        const day = now.getDate();
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const monthName = months[now.getMonth()];
+        const year = now.getFullYear();
+
+        let suffix = "th";
+        if (day === 1 || day === 21 || day === 31) suffix = "st";
+        else if (day === 2 || day === 22) suffix = "nd";
+        else if (day === 3 || day === 23) suffix = "rd";
+
+        let hours = now.getHours();
+        let minutes = now.getMinutes();
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12; 
+        minutes = minutes < 10 ? '0' + minutes : minutes; 
+
+        const formattedDateTime = `Date/Time: ${day}${suffix} ${monthName} ${year}, ${hours}:${minutes} ${ampm}`;
+        document.getElementById('dateTimeInput').value = formattedDateTime;
+    }
+
+    window.addEventListener('DOMContentLoaded', setAutomaticDateTime);
+
+    imageLoader.addEventListener('change', function(e) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            uploadedImage.crossOrigin = "anonymous";
+            uploadedImage.src = event.target.result;
+        }
+        reader.readAsDataURL(e.target.files[0]);
+    });
+
+    // ম্যাপের কোণা গোল করার জন্য রাউন্ডেড রেকট্যাঙ্গেল ফাংশন
+    function drawRoundedRect(context, x, y, width, height, radius) {
+        context.beginPath();
+        context.moveTo(x + radius, y);
+        context.lineTo(x + width - radius, y);
+        context.quadraticCurveTo(x + width, y, x + width, y + radius);
+        context.lineTo(x + width, y + height - radius);
+        context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        context.lineTo(x + radius, y + height);
+        context.quadraticCurveTo(x, y + height, x, y + height - radius);
+        context.lineTo(x, y + radius);
+        context.quadraticCurveTo(x, y, x + radius, y);
+        context.closePath();
+    }
+
+    // Custom Text Wrap Logic without breaking other scripts
+    function drawWrappedText(context, text, x, y, maxWidth, lineHeight) {
+        const words = text.split(' ');
+        let line = '';
+        let currentY = y;
+
+        for (let n = 0; n < words.length; n++) {
+            let testLine = line + words[n] + ' ';
+            let metrics = context.measureText(testLine);
+            let testWidth = metrics.width;
+            if (testWidth > maxWidth && n > 0) {
+                context.fillText(line, x, currentY);
+                line = words[n] + ' ';
+                currentY += lineHeight;
+            } else {
+                line = testLine;
+            }
+        }
+        context.fillText(line, x, currentY);
+        return currentY;
+    }
+
+generateBtn.addEventListener('click', function() {
+        if (!imageLoader.files[0] || !uploadedImage.src) {
+            alert('Doya kore age ekta chobi select korun!');
+            return;
+        }
+
+        const imgWidth = uploadedImage.naturalWidth;
+        const imgHeight = uploadedImage.naturalHeight;
+
+        canvas.width = imgWidth;
+        canvas.height = imgHeight;
+
+        ctx.drawImage(uploadedImage, 0, 0, imgWidth, imgHeight);
+
+        // ক্যামেরা কোডের স্কেলিং লজিক
+        const scaleFactor = Math.max(imgWidth / 480, 0.6); 
+          // 👉 Watermark (Top Right)
+  ctx.fillStyle = "rgba(255,255,255,0.8)";
+  ctx.font = `normal ${Math.round(18 * scaleFactor)}px Arial`;
+  ctx.textAlign = "right";
+  ctx.fillText("https://www.vdosky.in", canvas.width - (15 * scaleFactor), 30 * scaleFactor);
+        // ১. কালো ওভারলে বক্স
+        let overlayHeight = 110 * scaleFactor;
+        ctx.fillStyle = "rgba(0,0,0,0.65)";
+        ctx.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
+
+        // ২. ম্যাপের সাইজ ও পজিশন (ক্যামেরা কোডের মতো)
+        const mapSize = 80 * scaleFactor;
+        const mapX = 15 * scaleFactor;
+        const mapY = canvas.height - overlayHeight + (overlayHeight - mapSize) / 2;
+
+        ctx.save();
+        drawRoundedRect(ctx, mapX, mapY, mapSize, mapSize, 15 * scaleFactor);
+        ctx.clip(); 
+        try {
+            ctx.drawImage(staticMap, mapX, mapY, mapSize, mapSize);
+        } catch (e) {
+            console.error("Map load failed:", e);
+        }
+        ctx.restore();
+
+        // ৩. টেক্সট সেটিংস (ক্যামেরা কোডের ফন্ট ও গ্যাপ লজিক)
+        const fontSize = Math.round(14 * scaleFactor);
+        ctx.font = `normal ${fontSize}px Arial, sans-serif`;
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "left";
+
+        const addressText = "📍 Address: " + document.getElementById('addressInput').value;
+        const latLonText = document.getElementById('latLonInput').value;
+        const weatherText = document.getElementById('weatherInput').value;
+        const dateTimeText = document.getElementById('dateTimeInput').value;
+
+        const textPaddingLeft = mapX + mapSize + (15 * scaleFactor);
+        const maxWidth = canvas.width - textPaddingLeft - (15 * scaleFactor); 
+        const lineSpacing = 16 * scaleFactor; // ক্যামেরা কোডের লাইন স্পেসিং
+        
+        let startY = canvas.height - overlayHeight + (30 * scaleFactor);
+
+        // টেক্সট ড্র করা
+        let nextY = drawWrappedText(ctx, addressText, textPaddingLeft, startY, maxWidth, lineSpacing);
+        
+        ctx.fillText(latLonText, textPaddingLeft, nextY + lineSpacing);
+        ctx.fillText(weatherText, textPaddingLeft, nextY + (lineSpacing * 2));
+        ctx.fillText(dateTimeText, textPaddingLeft, nextY + (lineSpacing * 3));
+
+        outputImage.src = canvas.toDataURL('image/jpeg', 0.95);
+        previewContainer.style.display = 'block';
+    });
+  
+    // ডাউনলোড লজিক
+    downloadBtn.addEventListener('click', function() {
+        try {
+            canvas.toBlob(function(blob) {
+                if (!blob) {
+                    alert("Chobi parse korte somossa hoyechhe।");
+                    return;
+                }
+                const blobUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.download = 'gps-image_' + Date.now() + '.jpg';
+                link.href = blobUrl;
+                 
+                document.body.appendChild(link);
+                link.click();
+                 
+                document.body.removeChild(link);
+                URL.revokeObjectURL(blobUrl);
+            }, 'image/jpeg', 0.95);
+        } catch (error) {
+            console.error(error);
+            alert("click download button and download and go to gallery select image");
+        }
+    });
+</script>
+<script>
+// 1. Right Click bondho
+document.addEventListener('contextmenu', event => event.preventDefault());
+
+// 2. Advanced Security & Alt-Menu Block
+function blockSecurity(e) {
+    // Alt key block (System Menu block korar chesta)
+    if (e.altKey || e.keyCode == 18) {
+        e.preventDefault();
+        return false;
+    }
+
+    // F12, Ctrl+U, Ctrl+Shift+I, Ctrl+S, Ctrl+C block
+    if (e.keyCode == 123 || 
+        (e.ctrlKey && e.keyCode == 85) || 
+        (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74 || e.keyCode == 67)) || 
+        (e.ctrlKey && e.keyCode == 83) || 
+        (e.ctrlKey && e.keyCode == 67)) {
+        e.preventDefault();
+        return false;
+    }
+}
+
+// Keydown ebong Keyup — duto event-ei block kora hochhe jate menu na ashe
+document.addEventListener('keydown', blockSecurity);
+document.addEventListener('keyup', blockSecurity);
+
+// 3. Text Selection block
+document.onselectstart = function() { return false; };
+</script>
+</body>
+</html>
