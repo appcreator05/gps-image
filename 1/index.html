@@ -221,11 +221,7 @@ generateBtn.addEventListener('click', function() {
 
         // ক্যামেরা কোডের স্কেলিং লজিক
         const scaleFactor = Math.max(imgWidth / 480, 0.6); 
-          // 👉 Watermark (Top Right)
-  ctx.fillStyle = "rgba(255,255,255,0.8)";
-  ctx.font = `normal ${Math.round(18 * scaleFactor)}px Arial`;
-  ctx.textAlign = "right";
-  ctx.fillText("https://www.vdosky.in", canvas.width - (15 * scaleFactor), 30 * scaleFactor);
+        
         // ১. কালো ওভারলে বক্স
         let overlayHeight = 110 * scaleFactor;
         ctx.fillStyle = "rgba(0,0,0,0.65)";
