@@ -10,14 +10,9 @@
             background-color: #f4f7f6;
             margin: 0;
             padding: 10px;
-           
         }
         .container {
-            
-   
-           
             border-radius: 10px;
-            
             box-sizing: border-box;
         }
         h2 {
@@ -27,6 +22,7 @@
         }
         .form-group {
             margin-bottom: 12px;
+            position: relative; /* সাজেশন বক্স পজিশনিংয়ের জন্য দরকার */
         }
         label {
             display: block;
@@ -42,6 +38,32 @@
             border-radius: 5px;
             box-sizing: border-box;
             font-size: 14px;
+        }
+        /* ঠিকানা সাজেশনের স্টাইল */
+        #addressSuggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .suggestion-item {
+            padding: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+            border-bottom: 1px solid #f1f1f1;
+        }
+        .suggestion-item:hover {
+            background-color: #f8f9fa;
         }
         button {
             width: 100%;
@@ -88,7 +110,9 @@
 
     <div class="form-group">
         <label for="addressInput">Thikana (Address):</label>
-        <input type="text" id="addressInput" placeholder="Enter Your Address & Pin Code" value="">
+        <input type="text" id="addressInput" placeholder="Enter Your Address & Pin Code" value="" autocomplete="off">
+        <!-- ঠিকানা সাজেশনের জন্য ডিভ -->
+        <div id="addressSuggestions"></div>
     </div>
 
     <div class="form-group">
@@ -125,15 +149,74 @@
     const generateBtn = document.getElementById('generateBtn');
     const downloadBtn = document.getElementById('downloadBtn');
     const previewContainer = document.getElementById('previewContainer');
+    
+    const addressInput = document.getElementById('addressInput');
+    const addressSuggestions = document.getElementById('addressSuggestions');
 
     let uploadedImage = new Image();
 
-    // গিটহাবের স্ট্যাটিক ম্যাপ ইমেজ অবজেক্ট তৈরি
     let staticMap = new Image();
     staticMap.crossOrigin = "anonymous"; 
     staticMap.src = "https://raw.githubusercontent.com/appcreator05/gps-image/refs/heads/main/logo.png";
 
-    // অটোমেটিক তারিখ ও সময় জেনারেট করার লজিক
+    // ঠিকানা লোকাল স্টোরেজে সেভ এবং দেখানোর লজিক
+    function getSavedAddresses() {
+        let addresses = localStorage.getItem('savedAddresses');
+        return addresses ? JSON.parse(addresses) : [];
+    }
+
+    function saveAddress(newAddress) {
+        if (!newAddress.trim()) return;
+        let addresses = getSavedAddresses();
+        // ডুপ্লিকেট এড়াতে এবং নতুনটি সবার আগে রাখতে
+        addresses = addresses.filter(item => item !== newAddress);
+        addresses.unshift(newAddress);
+        // সর্বোচ্চ ১০টি ঠিকানা সেভ থাকবে
+        if (addresses.length > 10) addresses.pop();
+        localStorage.setItem('savedAddresses', JSON.stringify(addresses));
+    }
+
+    function showSuggestions(filter = '') {
+        let addresses = getSavedAddresses();
+        if (filter) {
+            addresses = addresses.filter(item => item.toLowerCase().includes(filter.toLowerCase()));
+        }
+        
+        if (addresses.length === 0) {
+            addressSuggestions.style.display = 'none';
+            return;
+        }
+
+        addressSuggestions.innerHTML = '';
+        addresses.forEach(addr => {
+            const div = document.createElement('div');
+            div.className = 'suggestion-item';
+            div.textContent = addr;
+            div.addEventListener('click', function() {
+                addressInput.value = addr;
+                addressSuggestions.style.display = 'none';
+            });
+            addressSuggestions.appendChild(div);
+        });
+        addressSuggestions.style.display = 'block';
+    }
+
+    addressInput.addEventListener('input', function() {
+        showSuggestions(this.value);
+    });
+
+    addressInput.addEventListener('focus', function() {
+        showSuggestions(this.value);
+    });
+
+    // বাইরে ক্লিক করলে সাজেশন বক্স লুকিয়ে যাবে
+    document.addEventListener('click', function(e) {
+        if (!addressInput.contains(e.target) && !addressSuggestions.contains(e.target)) {
+            addressSuggestions.style.display = 'none';
+        }
+    });
+
+    // অটোমেটিক তারিখ ও সময় জেনারেট করার লজিক
     function setAutomaticDateTime() {
         const now = new Date();
         const day = now.getDate();
@@ -168,7 +251,6 @@
         reader.readAsDataURL(e.target.files[0]);
     });
 
-    // ম্যাপের কোণা গোল করার জন্য রাউন্ডেড রেকট্যাঙ্গেল ফাংশন
     function drawRoundedRect(context, x, y, width, height, radius) {
         context.beginPath();
         context.moveTo(x + radius, y);
@@ -183,7 +265,6 @@
         context.closePath();
     }
 
-    // Custom Text Wrap Logic without breaking other scripts
     function drawWrappedText(context, text, x, y, maxWidth, lineHeight) {
         const words = text.split(' ');
         let line = '';
@@ -205,10 +286,16 @@
         return currentY;
     }
 
-generateBtn.addEventListener('click', function() {
+    generateBtn.addEventListener('click', function() {
         if (!imageLoader.files[0] || !uploadedImage.src) {
             alert('Doya kore age ekta chobi select korun!');
             return;
+        }
+
+        // যখন ইউজার ছবি জেনারেট করবে, তখন ঠিকানাটি লোকাল স্টোরেজে সেভ হয়ে যাবে
+        const currentAddress = addressInput.value;
+        if (currentAddress) {
+            saveAddress(currentAddress);
         }
 
         const imgWidth = uploadedImage.naturalWidth;
@@ -219,15 +306,12 @@ generateBtn.addEventListener('click', function() {
 
         ctx.drawImage(uploadedImage, 0, 0, imgWidth, imgHeight);
 
-        // ক্যামেরা কোডের স্কেলিং লজিক
         const scaleFactor = Math.max(imgWidth / 480, 0.6); 
         
-        // ১. কালো ওভারলে বক্স
         let overlayHeight = 110 * scaleFactor;
         ctx.fillStyle = "rgba(0,0,0,0.65)";
         ctx.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
 
-        // ২. ম্যাপের সাইজ ও পজিশন (ক্যামেরা কোডের মতো)
         const mapSize = 80 * scaleFactor;
         const mapX = 15 * scaleFactor;
         const mapY = canvas.height - overlayHeight + (overlayHeight - mapSize) / 2;
@@ -242,24 +326,22 @@ generateBtn.addEventListener('click', function() {
         }
         ctx.restore();
 
-        // ৩. টেক্সট সেটিংস (ক্যামেরা কোডের ফন্ট ও গ্যাপ লজিক)
         const fontSize = Math.round(14 * scaleFactor);
         ctx.font = `normal ${fontSize}px Arial, sans-serif`;
         ctx.fillStyle = "#fff";
         ctx.textAlign = "left";
 
-        const addressText = "📍 Address: " + document.getElementById('addressInput').value;
+        const addressText = "📍 Address: " + currentAddress;
         const latLonText = document.getElementById('latLonInput').value;
         const weatherText = document.getElementById('weatherInput').value;
-        const dateTimeText = document.getElementById('dateTimeInput').value;
+        const dateTimeText = document.getElementById('dateTimeInput5').value || document.getElementById('dateTimeInput').value;
 
         const textPaddingLeft = mapX + mapSize + (15 * scaleFactor);
         const maxWidth = canvas.width - textPaddingLeft - (15 * scaleFactor); 
-        const lineSpacing = 16 * scaleFactor; // ক্যামেরা কোডের লাইন স্পেসিং
+        const lineSpacing = 16 * scaleFactor; 
         
         let startY = canvas.height - overlayHeight + (30 * scaleFactor);
 
-        // টেক্সট ড্র করা
         let nextY = drawWrappedText(ctx, addressText, textPaddingLeft, startY, maxWidth, lineSpacing);
         
         ctx.fillText(latLonText, textPaddingLeft, nextY + lineSpacing);
@@ -270,7 +352,6 @@ generateBtn.addEventListener('click', function() {
         previewContainer.style.display = 'block';
     });
   
-    // ডাউনলোড লজিক
     downloadBtn.addEventListener('click', function() {
         try {
             canvas.toBlob(function(blob) {
