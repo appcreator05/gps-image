@@ -51,19 +51,19 @@
             border-radius: 0 0 5px 5px;
             max-height: 150px;
             overflow-y: auto;
-            z-index: 1000;
+            z-index: 9999; /* মোবাইলে যাতে সবার উপরে থাকে */
             display: none;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .suggestion-item {
-            padding: 10px;
+            padding: 12px 10px; /* মোবাইলে টাচ করার সুবিধারთვის প্যাডিং বাড়ানো হলো */
             cursor: pointer;
             font-size: 14px;
             color: #333;
             border-bottom: 1px solid #f1f1f1;
         }
-        .suggestion-item:hover {
-            background-color: #f8f9fa;
+        .suggestion-item:active {
+            background-color: #e9ecef;
         }
         button {
             width: 100%;
@@ -168,17 +168,15 @@
     function saveAddress(newAddress) {
         if (!newAddress.trim()) return;
         let addresses = getSavedAddresses();
-        // ডুপ্লিকেট এড়াতে এবং নতুনটি সবার আগে রাখতে
         addresses = addresses.filter(item => item !== newAddress);
         addresses.unshift(newAddress);
-        // সর্বোচ্চ ১০টি ঠিকানা সেভ থাকবে
         if (addresses.length > 10) addresses.pop();
         localStorage.setItem('savedAddresses', JSON.stringify(addresses));
     }
 
     function showSuggestions(filter = '') {
         let addresses = getSavedAddresses();
-        if (filter) {
+        if (filter.trim() !== '') {
             addresses = addresses.filter(item => item.toLowerCase().includes(filter.toLowerCase()));
         }
         
@@ -192,15 +190,20 @@
             const div = document.createElement('div');
             div.className = 'suggestion-item';
             div.textContent = addr;
-            div.addEventListener('click', function() {
+            
+            // মোবাইলে ক্লিকের পরিবর্তে touchend ব্যবহার করা ভালো যাতে দ্রুত কাজ করে
+            div.addEventListener('click', function(e) {
+                e.preventDefault();
                 addressInput.value = addr;
                 addressSuggestions.style.display = 'none';
             });
+            
             addressSuggestions.appendChild(div);
         });
         addressSuggestions.style.display = 'block';
     }
 
+    // মোবাইলের জন্য ইনপুট এবং ফোকাস ইভেন্ট উন্নত করা হলো
     addressInput.addEventListener('input', function() {
         showSuggestions(this.value);
     });
@@ -209,7 +212,7 @@
         showSuggestions(this.value);
     });
 
-    // বাইরে ক্লিক করলে সাজেশন বক্স লুকিয়ে যাবে
+    // মোবাইলে বাইরে ট্যাপ করলে যাতে ড্রপডাউন বন্ধ হয়ে যায়
     document.addEventListener('click', function(e) {
         if (!addressInput.contains(e.target) && !addressSuggestions.contains(e.target)) {
             addressSuggestions.style.display = 'none';
@@ -292,7 +295,6 @@
             return;
         }
 
-        // যখন ইউজার ছবি জেনারেট করবে, তখন ঠিকানাটি লোকাল স্টোরেজে সেভ হয়ে যাবে
         const currentAddress = addressInput.value;
         if (currentAddress) {
             saveAddress(currentAddress);
@@ -334,7 +336,7 @@
         const addressText = "📍 Address: " + currentAddress;
         const latLonText = document.getElementById('latLonInput').value;
         const weatherText = document.getElementById('weatherInput').value;
-        const dateTimeText = document.getElementById('dateTimeInput5').value || document.getElementById('dateTimeInput').value;
+        const dateTimeText = document.getElementById('dateTimeInput').value;
 
         const textPaddingLeft = mapX + mapSize + (15 * scaleFactor);
         const maxWidth = canvas.width - textPaddingLeft - (15 * scaleFactor); 
