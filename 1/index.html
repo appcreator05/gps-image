@@ -22,7 +22,7 @@
         }
         .form-group {
             margin-bottom: 12px;
-            position: relative; /* সাজেশন বক্স পজিশনিংয়ের জন্য দরকার */
+            position: relative; /* সাজেশন বক্স পজিশনিংয়ের জন্য দরকার */
         }
         label {
             display: block;
@@ -56,7 +56,7 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .suggestion-item {
-            padding: 12px 10px; /* মোবাইলে টাচ করার সুবিধারთვის প্যাডিং বাড়ানো হলো */
+            padding: 12px 10px; /* মোবাইলে টাচ করার সুবিধারთვის প্যাডিং বাড়ানো হলো */
             cursor: pointer;
             font-size: 14px;
             color: #333;
@@ -191,8 +191,13 @@
             div.className = 'suggestion-item';
             div.textContent = addr;
             
-            // মোবাইলে ক্লিকের পরিবর্তে touchend ব্যবহার করা ভালো যাতে দ্রুত কাজ করে
-            div.addEventListener('click', function(e) {
+            // মোবাইলে টাচ বা ক্লিকের সময় যাতে সঠিকভাবে কাজ করে
+            div.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                addressInput.value = addr;
+                addressSuggestions.style.display = 'none';
+            });
+            div.addEventListener('touchstart', function(e) {
                 e.preventDefault();
                 addressInput.value = addr;
                 addressSuggestions.style.display = 'none';
@@ -203,12 +208,16 @@
         addressSuggestions.style.display = 'block';
     }
 
-    // মোবাইলের জন্য ইনপুট এবং ফোকাস ইভেন্ট উন্নত করা হলো
+    // মোবাইলের জন্য ইনপুট, ফোকাস এবং ক্লিক ইভেন্ট
     addressInput.addEventListener('input', function() {
         showSuggestions(this.value);
     });
 
     addressInput.addEventListener('focus', function() {
+        showSuggestions(this.value);
+    });
+
+    addressInput.addEventListener('click', function() {
         showSuggestions(this.value);
     });
 
@@ -384,13 +393,11 @@ document.addEventListener('contextmenu', event => event.preventDefault());
 
 // 2. Advanced Security & Alt-Menu Block
 function blockSecurity(e) {
-    // Alt key block (System Menu block korar chesta)
     if (e.altKey || e.keyCode == 18) {
         e.preventDefault();
         return false;
     }
 
-    // F12, Ctrl+U, Ctrl+Shift+I, Ctrl+S, Ctrl+C block
     if (e.keyCode == 123 || 
         (e.ctrlKey && e.keyCode == 85) || 
         (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74 || e.keyCode == 67)) || 
@@ -401,11 +408,9 @@ function blockSecurity(e) {
     }
 }
 
-// Keydown ebong Keyup — duto event-ei block kora hochhe jate menu na ashe
 document.addEventListener('keydown', blockSecurity);
 document.addEventListener('keyup', blockSecurity);
 
-// 3. Text Selection block
 document.onselectstart = function() { return false; };
 </script>
 </body>
